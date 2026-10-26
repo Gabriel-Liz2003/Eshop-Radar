@@ -1,0 +1,58 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - android-apk
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - '.github/workflows/android.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - '.github/workflows/android.yml'
+
+jobs:
+  build-unsigned:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build TWA project and unsigned APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_DIR="$RUNNER_TEMP/eshop-radar-twa"
+          mkdir -p "$BUILD_DIR"
+          cp android/twa-manifest.json "$BUILD_DIR/twa-manifest.json"
+
+          docker run --rm \
+            -v "$BUILD_DIR:/workspace" \
+            -w /workspace \
+            ghcr.io/googlechromelabs/bubblewrap:latest \
+            update --skipVersionUpgrade --manifest=/workspace/twa-manifest.json
+
+          set +o pipefail
+          yes | docker run -i --rm \
+            -v "$BUILD_DIR:/workspace" \
+            -w /workspace \
+            ghcr.io/googlechromelabs/bubblewrap:latest \
+            build --skipSigning --skipPwaValidation --manifest=/workspace/twa-manifest.json
+          BUILD_STATUS=${PIPESTATUS[1]}
+          set -o pipefail
+          test "$BUILD_STATUS" -eq 0
+
+          APK="$(find "$BUILD_DIR" -type f -name '*.apk' | head -n 1)"
+          test -n "$APK"
+          cp "$APK" Eshop-Radar-unsigned.apk
+
+      - name: Upload unsigned APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Eshop-Radar-unsigned
+          path: Eshop-Radar-unsigned.apk
+          if-no-files-found: error

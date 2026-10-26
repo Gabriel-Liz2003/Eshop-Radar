@@ -3,3 +3,14 @@ node_modules/
 .dev.vars
 .eshop-setup.json
 .DS_Store
+
+# Generated Android/TWA files
+android/android.keystore
+android/.gradle/
+android/app/
+android/gradle/
+android/gradlew
+android/gradlew.bat
+android/build.gradle
+android/settings.gradle
+android/gradle.properties

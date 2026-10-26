@@ -7,6 +7,7 @@ PWA/Worker gratuito para monitorar **todos os jogos que entram em promoção na 
 - monitora o catálogo brasileiro de promoções da Nintendo;
 - Cloudflare Worker + D1 + Queues, pensado para o plano Free;
 - PWA instalável no Android;
+- APK Android oficial via Trusted Web Activity (TWA);
 - Web Push direto, sem Discord, Telegram ou ntfy;
 - alertas individuais para 1–3 jogos e agrupados para lotes maiores;
 - Wishlist/prioridade para receber alerta individual mesmo dentro de um lote;
@@ -66,6 +67,24 @@ No painel/PWA existe a seção **Atualizações**.
 
 A verificação **não faz deploy automaticamente** e não precisa de token do GitHub.
 
+Quando o painel está rodando dentro do APK oficial, ele também memoriza a versão do wrapper Android e compara com a seção `android` do `version.json`. Se houver um APK mais novo, aparece um botão separado para baixar `Eshop-Radar.apk`.
+
+## APK Android
+
+O APK usa **Trusted Web Activity**, então ele abre o mesmo PWA hospedado no Cloudflare Worker em tela cheia, em vez de empacotar uma cópia antiga do site dentro de um WebView. Isso preserva Service Worker e Web Push.
+
+Identidade fixa:
+
+- package ID: `com.gabrieldeliz.eshopradar`;
+- certificado SHA-256: `31:ED:93:D1:40:75:78:1C:02:35:E6:DD:05:77:9F:7F:C9:A2:30:B8:B8:41:5F:16:CF:80:76:49:72:23:FA:A8`;
+- Digital Asset Links: `/.well-known/assetlinks.json`.
+
+A chave privada não é publicada. O repositório contém apenas uma cópia **criptografada** do keystore. Para gerar releases assinadas, configure uma única vez o secret do GitHub Actions:
+
+`ANDROID_KEYSTORE_PASSWORD`
+
+Veja [android/README.md](./android/README.md) para os detalhes.
+
 ## Arquitetura
 
 ```text
@@ -90,6 +109,7 @@ Não publique credenciais no repositório. Os arquivos locais abaixo já estão 
 - `.dev.vars`
 - `.wrangler/`
 - `node_modules/`
+- `android/android.keystore`
 
 Os secrets como `ADMIN_TOKEN`, `VAPID_PRIVATE_KEY` e bindings/configurações privadas ficam na Cloudflare, não no código.
 
@@ -103,12 +123,19 @@ npm run dev
 
 ## Releases
 
-O workflow `.github/workflows/release.yml` cria automaticamente uma GitHub Release e o arquivo `eshop-br-alert-android.zip` quando uma tag `v*` é enviada.
+O workflow `.github/workflows/android.yml` compila um APK não assinado para validar o projeto TWA em CI.
+
+O workflow `.github/workflows/release.yml` cria automaticamente uma GitHub Release quando uma tag `v*` é enviada e publica:
+
+- `Eshop-Radar.apk` — APK assinado para instalação direta;
+- `Eshop-Radar.aab` — bundle para eventual Play Store;
+- `eshop-br-alert-source.zip` — código-fonte/Worker para atualização manual do Cloudflare.
 
 Antes de criar uma nova tag:
 
 1. atualize `APP_VERSION` em `src/index.ts`;
 2. atualize `package.json`;
 3. atualize `version.json` e `CHANGELOG.md`;
-4. confirme `npm run typecheck`;
-5. crie a tag, por exemplo `v1.7.1`.
+4. atualize `android/twa-manifest.json` (`appVersion`, `appVersionCode` e o parâmetro `apk=` do `startUrl`) quando o wrapper Android mudar;
+5. confirme `npm run typecheck`;
+6. crie a tag, por exemplo `v1.7.1`.

@@ -11,23 +11,118 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - run: npm install
-      - run: npm run typecheck
-      - name: Build update ZIP
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck Worker
+        run: npm run typecheck
+
+      - name: Ensure Android signing secret exists
+        shell: bash
         run: |
-          zip -r eshop-br-alert-android.zip . \
-            -x '.git/*' 'node_modules/*' '.wrangler/*' '.dev.vars' '.eshop-setup.json' 'eshop-br-alert-android.zip'
+          set -euo pipefail
+          if [ -z "${ANDROID_KEYSTORE_PASSWORD:-}" ]; then
+            echo "::error::ANDROID_KEYSTORE_PASSWORD não está configurado em Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Decrypt Android signing key
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          base64 -d android/release-keystore.jks.enc.b64 > "$RUNNER_TEMP/eshop-radar-release.jks.enc"
+          openssl enc -d -aes-256-cbc -pbkdf2 \
+            -in "$RUNNER_TEMP/eshop-radar-release.jks.enc" \
+            -out "$RUNNER_TEMP/eshop-radar-release.jks" \
+            -pass env:ANDROID_KEYSTORE_PASSWORD
+
+          keytool -list \
+            -keystore "$RUNNER_TEMP/eshop-radar-release.jks" \
+            -alias eshopradar \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" >/dev/null
+
+      - name: Build signed Android APK and AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_DIR="$RUNNER_TEMP/eshop-radar-twa"
+          mkdir -p "$BUILD_DIR"
+          cp android/twa-manifest.json "$BUILD_DIR/twa-manifest.json"
+          cp "$RUNNER_TEMP/eshop-radar-release.jks" "$BUILD_DIR/android.keystore"
+
+          docker run --rm \
+            -v "$BUILD_DIR:/workspace" \
+            -w /workspace \
+            ghcr.io/googlechromelabs/bubblewrap:latest \
+            update --skipVersionUpgrade --manifest=/workspace/twa-manifest.json
+
+          set +o pipefail
+          yes | docker run -i --rm \
+            -e BUBBLEWRAP_KEYSTORE_PASSWORD \
+            -e BUBBLEWRAP_KEY_PASSWORD \
+            -v "$BUILD_DIR:/workspace" \
+            -w /workspace \
+            ghcr.io/googlechromelabs/bubblewrap:latest \
+            build --skipPwaValidation \
+            --manifest=/workspace/twa-manifest.json \
+            --signingKeyPath=/workspace/android.keystore \
+            --signingKeyAlias=eshopradar
+          BUILD_STATUS=${PIPESTATUS[1]}
+          set -o pipefail
+          test "$BUILD_STATUS" -eq 0
+
+          APK="$(find "$BUILD_DIR" -type f -name '*signed*.apk' | head -n 1)"
+          if [ -z "$APK" ]; then
+            APK="$(find "$BUILD_DIR" -type f -name '*.apk' | head -n 1)"
+          fi
+          test -n "$APK"
+          cp "$APK" Eshop-Radar.apk
+
+          AAB="$(find "$BUILD_DIR" -type f -name '*.aab' | head -n 1 || true)"
+          if [ -n "$AAB" ]; then
+            cp "$AAB" Eshop-Radar.aab
+          fi
+
+      - name: Build source ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip -r eshop-br-alert-source.zip . \
+            -x '.git/*' \
+               'node_modules/*' \
+               '.wrangler/*' \
+               '.dev.vars' \
+               '.eshop-setup.json' \
+               'android/android.keystore' \
+               'Eshop-Radar.apk' \
+               'Eshop-Radar.aab' \
+               'eshop-br-alert-source.zip'
+
       - name: Publish GitHub Release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" eshop-br-alert-android.zip \
+          set -euo pipefail
+          assets=(Eshop-Radar.apk eshop-br-alert-source.zip)
+          if [ -f Eshop-Radar.aab ]; then
+            assets+=(Eshop-Radar.aab)
+          fi
+
+          gh release create "${GITHUB_REF_NAME}" "${assets[@]}" \
             --repo "${GITHUB_REPOSITORY}" \
             --title "eShop BR Alert ${GITHUB_REF_NAME}" \
             --generate-notes

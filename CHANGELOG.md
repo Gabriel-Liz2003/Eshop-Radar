@@ -2,6 +2,10 @@
 
 ## 1.7.0 — 2026-10-26
 
+- Adiciona APK Android oficial via Trusted Web Activity (TWA).
+- Publica Digital Asset Links no Worker para abrir o APK sem barra de navegador.
+- Adiciona pipeline de APK/AAB no GitHub Actions com chave de assinatura criptografada.
+- O verificador de atualizações passa a reconhecer também a versão do wrapper Android quando usado pelo APK.
 - Adiciona **Verificar atualizações** dentro do PWA.
 - Faz uma verificação automática no GitHub no máximo uma vez a cada 6 horas por aparelho.
 - Mostra versão instalada, versão mais recente, notas e botão de download quando houver atualização.
