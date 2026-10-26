@@ -1,0 +1,22 @@
+{
+  "name": "eshop-br-alert",
+  "version": "1.7.0",
+  "private": true,
+  "type": "module",
+  "description": "Radar gratuito de promoções da Nintendo eShop Brasil com Cloudflare Workers, D1, Queues, PWA, Web Push e verificação de atualizações via GitHub.",
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --test-scheduled",
+    "typecheck": "tsc --noEmit",
+    "upgrade-push": "node scripts/upgrade-push.mjs",
+    "upgrade-queue": "node scripts/upgrade-queue.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "wrangler": "^4.119.0"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}
