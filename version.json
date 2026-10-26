@@ -1,7 +1,14 @@
 {
   "version": "1.7.0",
   "published_at": "2026-10-26",
-  "notes": "Adiciona verificação de atualizações dentro do PWA e transforma o GitHub na fonte oficial de versões.",
-  "download_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest/download/eshop-br-alert-android.zip",
-  "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest"
+  "notes": "Adiciona verificação de atualizações no PWA e suporte oficial a APK Android via Trusted Web Activity.",
+  "download_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest/download/eshop-br-alert-source.zip",
+  "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest",
+  "android": {
+    "version": "1.7.0",
+    "version_code": 10700,
+    "package_id": "com.gabrieldeliz.eshopradar",
+    "apk_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest/download/Eshop-Radar.apk",
+    "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest"
+  }
 }
