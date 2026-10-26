@@ -69,7 +69,8 @@ jobs:
             ghcr.io/googlechromelabs/bubblewrap:latest \
             update --skipVersionUpgrade --manifest=/workspace/twa-manifest.json
 
-          docker run --rm \
+          set +o pipefail
+          yes | docker run -i --rm \
             -e BUBBLEWRAP_KEYSTORE_PASSWORD \
             -e BUBBLEWRAP_KEY_PASSWORD \
             -v "$BUILD_DIR:/workspace" \
@@ -79,6 +80,9 @@ jobs:
             --manifest=/workspace/twa-manifest.json \
             --signingKeyPath=/workspace/android.keystore \
             --signingKeyAlias=eshopradar
+          BUILD_STATUS=${PIPESTATUS[1]}
+          set -o pipefail
+          test "$BUILD_STATUS" -eq 0
 
           APK="$(find "$BUILD_DIR" -type f -name '*signed*.apk' | head -n 1)"
           if [ -z "$APK" ]; then
