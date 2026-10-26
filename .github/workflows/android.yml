@@ -36,11 +36,15 @@ jobs:
             ghcr.io/googlechromelabs/bubblewrap:latest \
             update --skipVersionUpgrade --manifest=/workspace/twa-manifest.json
 
-          docker run --rm \
+          set +o pipefail
+          yes | docker run -i --rm \
             -v "$BUILD_DIR:/workspace" \
             -w /workspace \
             ghcr.io/googlechromelabs/bubblewrap:latest \
             build --skipSigning --skipPwaValidation --manifest=/workspace/twa-manifest.json
+          BUILD_STATUS=${PIPESTATUS[1]}
+          set -o pipefail
+          test "$BUILD_STATUS" -eq 0
 
           APK="$(find "$BUILD_DIR" -type f -name '*.apk' | head -n 1)"
           test -n "$APK"
