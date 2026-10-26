@@ -1,0 +1,38 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "eshop-br-alert",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-25",
+  "workers_dev": true,
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "SCAN_QUEUE",
+        "queue": "eshop-br-scan"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "eshop-br-scan",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 2,
+        "max_concurrency": 1,
+        "retry_delay": 30
+      }
+    ]
+  }
+}
