@@ -282,3 +282,279 @@ async function loadState(env: Env): Promise<AppState> {
 }
 
 async function saveState(env: Env, state: AppState): Promise<void> {
+  const now = new Date().toISOString();
+  await env.DB.prepare(`
+    INSERT INTO app_state (id, json, updated_at)
+    VALUES (1, ?1, ?2)
+    ON CONFLICT(id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at
+  `).bind(JSON.stringify(state), now).run();
+}
+
+type FacetFilter = string | string[];
+
+function catalogParams(facetFilters: FacetFilter[], options: { facets?: string[]; hitsPerPage?: number; page?: number } = {}): string {
+  const values: Record<string, string> = {
+    query: "",
+    distinct: "1",
+    facetingAfterDistinct: "true",
+    hitsPerPage: String(options.hitsPerPage ?? ALGOLIA_HITS_PER_PARTITION),
+    page: String(options.page ?? 0),
+    facetFilters: JSON.stringify(facetFilters),
+    attributesToRetrieve: [
+      "objectID",
+      "title",
+      "nsuid",
+      "titleId",
+      "title_id",
+      "topLevelFilters",
+      "productType",
+      "type",
+      "dlcType",
+      "url",
+      "price",
+      "softwarePublisher",
+      "priceRangeFilter",
+    ].join(","),
+  };
+  if (options.facets?.length) {
+    values.facets = options.facets.join(",");
+    values.maxValuesPerFacet = String(ALGOLIA_MAX_FACET_VALUES);
+  }
+  return new URLSearchParams(values).toString();
+}
+
+async function algoliaErrorMessage(response: Response, prefix: string): Promise<Error> {
+  let detail = "";
+  try {
+    detail = (await response.text()).replace(/\s+/g, " ").trim().slice(0, 240);
+  } catch {}
+  return new Error(`${prefix} HTTP ${response.status}${detail ? ` — ${detail}` : ""}`);
+}
+
+async function fetchCatalogMeta(facetFilters: FacetFilter[]): Promise<SalesPage> {
+  const response = await fetch(ALGOLIA_QUERY_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "x-algolia-application-id": ALGOLIA_APP_ID,
+      "x-algolia-api-key": ALGOLIA_API_KEY,
+    },
+    body: JSON.stringify({
+      params: catalogParams(facetFilters, { facets: [...PARTITION_FACETS], hitsPerPage: 0 }),
+    }),
+  });
+  if (!response.ok) throw await algoliaErrorMessage(response, "Nintendo catalog metadata");
+  return await response.json() as SalesPage;
+}
+
+interface PartitionPlan {
+  total: number;
+  facet: string | null;
+  filters: FacetFilter[][];
+}
+
+interface FacetBucketGroup {
+  values: string[];
+  count: number;
+}
+
+function groupFacetBuckets(entries: Array<[string, number]>): FacetBucketGroup[] {
+  const groups: FacetBucketGroup[] = [];
+  const sorted = [...entries].sort((a, b) => b[1] - a[1]);
+
+  for (const [value, count] of sorted) {
+    if (count > ALGOLIA_HITS_PER_PARTITION) {
+      throw new Error(`Bucket ${value} tem ${count} jogos, acima do limite do Algolia.`);
+    }
+
+    let bestIndex = -1;
+    let bestRemaining = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < groups.length; i += 1) {
+      const next = groups[i].count + count;
+      if (next <= ALGOLIA_PARTITION_TARGET_HITS) {
+        const remaining = ALGOLIA_PARTITION_TARGET_HITS - next;
+        if (remaining < bestRemaining) {
+          bestRemaining = remaining;
+          bestIndex = i;
+        }
+      }
+    }
+
+    if (bestIndex >= 0) {
+      groups[bestIndex].values.push(value);
+      groups[bestIndex].count += count;
+    } else {
+      groups.push({ values: [value], count });
+    }
+  }
+
+  return groups;
+}
+
+async function buildPartitionPlan(): Promise<PartitionPlan> {
+  const baseFilters: FacetFilter[] = [SALES_FACET, GAME_FACET];
+  const meta = await fetchCatalogMeta(baseFilters);
+  const total = Number(meta.nbHits ?? 0);
+  if (total <= ALGOLIA_HITS_PER_PARTITION) {
+    return { total, facet: null, filters: [baseFilters] };
+  }
+
+  const candidates: Array<{ facet: string; groups: FacetBucketGroup[] }> = [];
+  for (const facet of PARTITION_FACETS) {
+    const entries = Object.entries(meta.facets?.[facet] ?? {})
+      .map(([value, count]) => [value, Number(count)] as [string, number])
+      .filter(([value, count]) => value && Number.isFinite(count) && count > 0);
+    if (!entries.length) continue;
+
+    const covered = entries.reduce((sum, [, count]) => sum + count, 0);
+    const max = Math.max(...entries.map(([, count]) => count));
+    if (covered !== total || max > ALGOLIA_HITS_PER_PARTITION) continue;
+
+    const groups = groupFacetBuckets(entries);
+    candidates.push({ facet, groups });
+  }
+
+  candidates.sort((a, b) => {
+    const aStable = a.facet === "softwarePublisher" ? 0 : 1;
+    const bStable = b.facet === "softwarePublisher" ? 0 : 1;
+    if (aStable !== bStable) return aStable - bStable;
+    return a.groups.length - b.groups.length;
+  });
+  const chosen = candidates[0];
+  if (!chosen) {
+    throw new Error(`Não foi possível particionar ${total} promoções sem perder jogos. Facets do catálogo mudaram.`);
+  }
+
+  return {
+    total,
+    facet: chosen.facet,
+    filters: chosen.groups.map((group) => {
+      const publisherFilters = group.values.map((value) => `${chosen.facet}:${value}`);
+      return [...baseFilters, publisherFilters];
+    }),
+  };
+}
+
+async function fetchPartitionPage(facetFilters: FacetFilter[], page: number, hitsPerPage: number): Promise<Response> {
+  return fetch(ALGOLIA_QUERY_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "x-algolia-application-id": ALGOLIA_APP_ID,
+      "x-algolia-api-key": ALGOLIA_API_KEY,
+    },
+    body: JSON.stringify({
+      params: catalogParams(facetFilters, { page, hitsPerPage }),
+    }),
+  });
+}
+
+async function fetchAllPartitionPages(filters: FacetFilter[][]): Promise<SalesPage[]> {
+  const partitions: SalesPage[] = [];
+
+  for (const facetFilters of filters) {
+    let pageSize = ALGOLIA_INITIAL_PAGE_SIZE;
+    let firstResponse: Response | null = null;
+
+    while (pageSize >= ALGOLIA_MIN_PAGE_SIZE) {
+      const response = await fetchPartitionPage(facetFilters, 0, pageSize);
+      if (response.ok) {
+        firstResponse = response;
+        break;
+      }
+
+      const detail = await response.text();
+      const isDistinctLimit = response.status === 400
+        && /hitsPerPage\s*\*\s*distinct|invalid distinct value/i.test(detail);
+      if (!isDistinctLimit || pageSize === ALGOLIA_MIN_PAGE_SIZE) {
+        const suffix = detail.replace(/\s+/g, " ").trim().slice(0, 240);
+        throw new Error(`Nintendo catalog HTTP ${response.status}${suffix ? ` — ${suffix}` : ""}`);
+      }
+
+      pageSize = Math.max(ALGOLIA_MIN_PAGE_SIZE, Math.floor(pageSize / 2));
+    }
+
+    if (!firstResponse) throw new Error("Nintendo catalog: não foi possível escolher um tamanho de página válido.");
+
+    const first = await firstResponse.json() as SalesPage;
+    const hits: unknown[] = Array.isArray(first.hits) ? [...first.hits] : [];
+    const nbPages = Math.max(1, Number(first.nbPages ?? 1));
+
+    for (let page = 1; page < nbPages; page += 1) {
+      const response = await fetchPartitionPage(facetFilters, page, pageSize);
+      if (!response.ok) throw await algoliaErrorMessage(response, `Nintendo catalog página ${page}`);
+      const payload = await response.json() as SalesPage;
+      if (Array.isArray(payload.hits)) hits.push(...payload.hits);
+    }
+
+    partitions.push({ ...first, hits, hitsPerPage: pageSize, page: 0 });
+  }
+
+  return partitions;
+}
+
+function extractPriceObject(payload: unknown): Record<string, unknown> | null {
+  if (!payload || typeof payload !== "object") return null;
+  const root = payload as Record<string, unknown>;
+  const prices = root.prices;
+  if (Array.isArray(prices) && prices.length > 0 && prices[0] && typeof prices[0] === "object") {
+    return prices[0] as Record<string, unknown>;
+  }
+  return null;
+}
+
+function readAmount(value: unknown): { amount?: string; raw?: number; currency?: string; start?: string; end?: string } {
+  if (!value || typeof value !== "object") return {};
+  const obj = value as Record<string, unknown>;
+  const rawString = obj.raw_value != null ? String(obj.raw_value) : undefined;
+  const raw = rawString ? Number(rawString.replace(",", ".")) : undefined;
+  return {
+    amount: obj.amount != null ? String(obj.amount) : undefined,
+    raw: Number.isFinite(raw) ? raw : undefined,
+    currency: obj.currency != null ? String(obj.currency) : undefined,
+    start: obj.start_datetime != null ? String(obj.start_datetime) : undefined,
+    end: obj.end_datetime != null ? String(obj.end_datetime) : undefined,
+  };
+}
+
+async function fetchPrice(titleId: string): Promise<PriceInfo | null> {
+  const url = new URL(PRICE_ENDPOINT);
+  url.searchParams.set("country", "BR");
+  url.searchParams.set("ids", titleId);
+  url.searchParams.set("lang", "pt");
+
+  const response = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+  if (!response.ok) return null;
+
+  const payload = await response.json();
+  const price = extractPriceObject(payload);
+  if (!price) return null;
+
+  const regular = readAmount(price.regular_price);
+  const discount = readAmount(price.discount_price);
+  let percent: number | undefined;
+  if (regular.raw && discount.raw != null && regular.raw > 0 && discount.raw <= regular.raw) {
+    percent = Math.round((1 - discount.raw / regular.raw) * 100);
+  }
+
+  return {
+    regular: regular.amount,
+    discount: discount.amount,
+    currency: discount.currency ?? regular.currency,
+    percent,
+    start: discount.start,
+    end: discount.end,
+  };
+}
+
+function formatDate(value?: string): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
