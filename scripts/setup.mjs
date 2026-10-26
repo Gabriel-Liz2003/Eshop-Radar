@@ -57,14 +57,26 @@ if (whoami.status !== 0 || /not authenticated|not logged/i.test(`${whoami.stdout
 
 const secrets = loadOrCreateSecrets();
 
-console.log("\n2/4 Fazendo o primeiro deploy e criando o D1 automaticamente...");
+console.log("\n2/5 Criando a fila do monitor (se ainda não existir)...");
+const queueCreate = spawnSync("npx", ["wrangler", "queues", "create", "eshop-br-scan"], {
+  encoding: "utf8",
+  shell: process.platform === "win32",
+});
+const queueOutput = `${queueCreate.stdout ?? ""}\n${queueCreate.stderr ?? ""}`;
+if (queueCreate.status !== 0 && !/already exists|already been created|queue.*exists/i.test(queueOutput)) {
+  if (queueCreate.stdout) process.stdout.write(queueCreate.stdout);
+  if (queueCreate.stderr) process.stderr.write(queueCreate.stderr);
+  process.exit(queueCreate.status ?? 1);
+}
+
+console.log("\n3/5 Fazendo o primeiro deploy e criando o D1 automaticamente...");
 const deploy = run("npx", ["wrangler", "deploy"], { stdio: ["inherit", "pipe", "pipe"] });
 process.stdout.write(deploy.stdout ?? "");
 process.stderr.write(deploy.stderr ?? "");
 const combined = `${deploy.stdout ?? ""}\n${deploy.stderr ?? ""}`;
 const workerUrl = combined.match(/https:\/\/[^\s]+\.workers\.dev\/?/i)?.[0]?.replace(/\/$/, "") ?? null;
 
-console.log("\n3/4 Gravando os segredos Web Push e do painel...");
+console.log("\n4/5 Gravando os segredos Web Push e do painel...");
 run("npx", ["wrangler", "secret", "put", "VAPID_PUBLIC_KEY"], {
   input: `${secrets.vapidPublicKey}\n`,
   stdio: ["pipe", "inherit", "inherit"],
@@ -78,7 +90,7 @@ run("npx", ["wrangler", "secret", "put", "ADMIN_TOKEN"], {
   stdio: ["pipe", "inherit", "inherit"],
 });
 
-console.log("\n4/4 Pronto.\n");
+console.log("\n5/5 Pronto.\n");
 if (workerUrl) {
   console.log(`Status público: ${workerUrl}/status`);
   console.log(`Painel privado: ${workerUrl}/admin?token=${secrets.adminToken}`);
