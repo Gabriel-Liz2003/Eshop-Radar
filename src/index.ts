@@ -30,6 +30,8 @@ import {
 const APP_VERSION = "1.7.0";
 const PROJECT_URL = "https://github.com/Gabriel-Liz2003/Eshop-Radar";
 const UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Gabriel-Liz2003/Eshop-Radar/main/version.json";
+const ANDROID_PACKAGE_ID = "com.gabrieldeliz.eshopradar";
+const ANDROID_CERT_SHA256 = "31:ED:93:D1:40:75:78:1C:02:35:E6:DD:05:77:9F:7F:C9:A2:30:B8:B8:41:5F:16:CF:80:76:49:72:23:FA:A8";
 
 interface D1RunResult {
   meta?: { changes?: number };
@@ -1050,6 +1052,13 @@ interface UpdateManifest {
   download_url?: string;
   release_url?: string;
   published_at?: string;
+  android?: {
+    version?: string;
+    version_code?: number;
+    apk_url?: string;
+    release_url?: string;
+    package_id?: string;
+  };
 }
 
 function versionParts(version: string): number[] {
@@ -1071,7 +1080,7 @@ function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-async function updateInfo(): Promise<Record<string, unknown>> {
+async function updateInfo(installedAndroidVersion?: string): Promise<Record<string, unknown>> {
   const response = await fetch(`${UPDATE_MANIFEST_URL}?t=${Date.now()}`, {
     headers: {
       Accept: "application/json",
@@ -1083,6 +1092,12 @@ async function updateInfo(): Promise<Record<string, unknown>> {
   if (!manifest?.version || !/^v?\d+\.\d+\.\d+/.test(manifest.version)) {
     throw new Error("Manifesto de versão inválido no GitHub.");
   }
+
+  const androidLatest = manifest.android?.version?.replace(/^v/i, "") ?? null;
+  const androidCurrent = installedAndroidVersion && /^v?\d+\.\d+\.\d+/.test(installedAndroidVersion)
+    ? installedAndroidVersion.replace(/^v/i, "")
+    : null;
+
   return {
     currentVersion: APP_VERSION,
     latestVersion: manifest.version.replace(/^v/i, ""),
@@ -1092,6 +1107,14 @@ async function updateInfo(): Promise<Record<string, unknown>> {
     releaseUrl: manifest.release_url ?? PROJECT_URL,
     publishedAt: manifest.published_at ?? null,
     projectUrl: PROJECT_URL,
+    android: {
+      currentVersion: androidCurrent,
+      latestVersion: androidLatest,
+      updateAvailable: !!(androidCurrent && androidLatest && compareVersions(androidLatest, androidCurrent) > 0),
+      apkUrl: manifest.android?.apk_url ?? null,
+      releaseUrl: manifest.android?.release_url ?? manifest.release_url ?? PROJECT_URL,
+      packageId: manifest.android?.package_id ?? ANDROID_PACKAGE_ID,
+    },
   };
 }
 
@@ -1112,6 +1135,24 @@ function jsonResponse(data: unknown, status = 200): Response {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
+    },
+  });
+}
+
+function assetLinksResponse(): Response {
+  return new Response(JSON.stringify([
+    {
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: {
+        namespace: "android_app",
+        package_name: ANDROID_PACKAGE_ID,
+        sha256_cert_fingerprints: [ANDROID_CERT_SHA256],
+      },
+    },
+  ], null, 2), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=3600",
     },
   });
 }
@@ -1198,7 +1239,7 @@ function offlinePage(): string {
 
 function unauthorizedPage(errorMessage = ""): string {
   const error = errorMessage ? `<p style="color:#ff7b72"><b>${escapeHtml(errorMessage)}</b></p>` : "";
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f1115"><title>eShop BR Alert</title><style>:root{color-scheme:dark;font-family:system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1115;color:#f4f7fb;padding:28px}.box{width:min(100%,480px);background:#1a1e26;border:1px solid #303641;border-radius:22px;padding:26px}code{word-break:break-word;color:#7ee787}.pair{margin-top:22px;padding-top:20px;border-top:1px solid #343a45}input,button{font:inherit;border-radius:12px;padding:12px 14px}input{width:100%;background:#0d1117;color:#fff;border:1px solid #49515e;font-size:26px;letter-spacing:.18em;text-align:center;font-weight:800}button{width:100%;margin-top:10px;border:0;background:#32cd91;color:#07150f;font-weight:850;min-height:48px}small{color:#aab2bf}</style></head><body><main class="box"><h1>🔒 Painel protegido</h1><p>O Brave e o app instalado estão usando sessões separadas neste aparelho. Vincule o app uma única vez com um código temporário.</p>${error}<div class="pair"><h2>Vincular este app</h2><p><small>No Brave normal, abra seu painel privado e toque em <b>Gerar código para o app</b>. Digite aqui os 8 números.</small></p><form method="post" action="/pair"><input name="code" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" autocomplete="one-time-code" placeholder="00000000" required><button type="submit">Vincular e abrir painel</button></form></div></main></body></html>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0f1115"><title>eShop BR Alert</title><style>:root{color-scheme:dark;font-family:system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1115;color:#f4f7fb;padding:28px}.box{width:min(100%,480px);background:#1a1e26;border:1px solid #303641;border-radius:22px;padding:26px}code{word-break:break-word;color:#7ee787}.pair{margin-top:22px;padding-top:20px;border-top:1px solid #343a45}input,button{font:inherit;border-radius:12px;padding:12px 14px}input{width:100%;background:#0d1117;color:#fff;border:1px solid #49515e;font-size:26px;letter-spacing:.18em;text-align:center;font-weight:800}button{width:100%;margin-top:10px;border:0;background:#32cd91;color:#07150f;font-weight:850;min-height:48px}small{color:#aab2bf}</style></head><body><main class="box"><h1>🔒 Painel protegido</h1><p>O Brave e o app instalado estão usando sessões separadas neste aparelho. Vincule o app uma única vez com um código temporário.</p>${error}<div class="pair"><h2>Vincular este app</h2><p><small>No Brave normal, abra seu painel privado e toque em <b>Gerar código para o app</b>. Digite aqui os 8 números.</small></p><form method="post" action="/pair"><input name="code" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" autocomplete="one-time-code" placeholder="00000000" required><button type="submit">Vincular e abrir painel</button></form></div></main><script>try{const apk=new URLSearchParams(location.search).get('apk');if(apk&&/^v?\\d+\\.\\d+\\.\\d+/.test(apk))localStorage.setItem('eshop-android-wrapper-version',apk.replace(/^v/i,''));}catch{}</script></body></html>`;
 }
 
 function pairingCodePage(code: string): string {
@@ -1358,6 +1399,14 @@ const installButton = document.getElementById('install-app');
 const installStatus = document.getElementById('install-status');
 const installCard = document.getElementById('install-card');
 const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+let androidWrapperVersion = null;
+try {
+  const fromUrl = new URLSearchParams(location.search).get('apk');
+  if (fromUrl && /^v?\d+\.\d+\.\d+/.test(fromUrl)) {
+    localStorage.setItem('eshop-android-wrapper-version', fromUrl.replace(/^v/i, ''));
+  }
+  androidWrapperVersion = localStorage.getItem('eshop-android-wrapper-version');
+} catch {}
 
 async function registerSW() {
   if (!('serviceWorker' in navigator)) return null;
@@ -1431,23 +1480,47 @@ async function checkForUpdates(manual = false) {
   button.disabled = true;
   status.textContent = 'Consultando o GitHub...';
   actions.replaceChildren();
+
+  const addDownloadButton = (label, href) => {
+    if (!href) return;
+    const download = document.createElement('a');
+    download.href = href;
+    download.target = '_blank';
+    download.rel = 'noopener';
+    download.style.textDecoration = 'none';
+    const downloadButton = document.createElement('button');
+    downloadButton.type = 'button';
+    downloadButton.textContent = label;
+    download.appendChild(downloadButton);
+    actions.appendChild(download);
+  };
+
   try {
-    const response = await fetch('/admin/update/check', { cache: 'no-store' });
+    const endpoint = androidWrapperVersion
+      ? '/admin/update/check?android=' + encodeURIComponent(androidWrapperVersion)
+      : '/admin/update/check';
+    const response = await fetch(endpoint, { cache: 'no-store' });
     const data = await response.json();
     if (!response.ok) throw new Error(data?.error || ('HTTP ' + response.status));
     localStorage.setItem('eshop-last-update-check', String(Date.now()));
-    if (data.updateAvailable) {
-      status.textContent = '⬆️ Nova versão v' + data.latestVersion + ' disponível. Você está na v' + data.currentVersion + '.' + (data.notes ? ' ' + data.notes : '');
-      const download = document.createElement('a');
-      download.href = data.downloadUrl || data.releaseUrl || data.projectUrl;
-      download.target = '_blank';
-      download.rel = 'noopener';
-      download.style.textDecoration = 'none';
-      const downloadButton = document.createElement('button');
-      downloadButton.type = 'button';
-      downloadButton.textContent = '⬇️ Baixar atualização';
-      download.appendChild(downloadButton);
-      actions.appendChild(download);
+
+    const webUpdate = !!data.updateAvailable;
+    const androidUpdate = !!data.android?.updateAvailable;
+
+    if (webUpdate) {
+      addDownloadButton('⬇️ Baixar atualização do projeto', data.downloadUrl || data.releaseUrl || data.projectUrl);
+    }
+    if (androidUpdate) {
+      addDownloadButton('📱 Baixar APK v' + data.android.latestVersion, data.android.apkUrl || data.android.releaseUrl);
+    }
+
+    if (webUpdate || androidUpdate) {
+      const parts = [];
+      if (webUpdate) parts.push('Web/PWA v' + data.latestVersion + ' disponível (instalada: v' + data.currentVersion + ')');
+      if (androidUpdate) parts.push('APK v' + data.android.latestVersion + ' disponível (instalado: v' + data.android.currentVersion + ')');
+      status.textContent = '⬆️ ' + parts.join(' · ') + (data.notes ? '. ' + data.notes : '');
+    } else if (androidWrapperVersion && data.android?.latestVersion) {
+      status.textContent = '✅ Web/PWA v' + data.currentVersion + ' e APK v' + data.android.currentVersion + ' estão atualizados.';
     } else {
       status.textContent = '✅ Você está na versão mais recente: v' + data.currentVersion + '.';
     }
@@ -1595,6 +1668,7 @@ export default {
 
     if (url.pathname === "/sw.js") return jsResponse(serviceWorkerScript());
     if (url.pathname === "/manifest.webmanifest") return manifestResponse();
+    if (url.pathname === "/.well-known/assetlinks.json") return assetLinksResponse();
     if (url.pathname === "/offline") return htmlResponse(offlinePage());
     if (url.pathname === "/icon-192.png") return binaryBase64Response(ICON_192_BASE64, "image/png");
     if (url.pathname === "/icon-512.png") return binaryBase64Response(ICON_512_BASE64, "image/png");
@@ -1660,7 +1734,7 @@ export default {
 
     if (url.pathname === "/admin/update/check" && request.method === "GET") {
       try {
-        return jsonResponse(await updateInfo());
+        return jsonResponse(await updateInfo(url.searchParams.get("android") ?? undefined));
       } catch (error) {
         return jsonResponse({ error: error instanceof Error ? error.message : String(error) }, 502);
       }
