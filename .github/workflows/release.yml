@@ -12,8 +12,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
 
     steps:
       - uses: actions/checkout@v4
@@ -39,8 +38,6 @@ jobs:
 
       - name: Decrypt Android signing key
         shell: bash
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
           base64 -d android/release-keystore.jks.enc.b64 > "$RUNNER_TEMP/eshop-radar-release.jks.enc"
@@ -52,18 +49,20 @@ jobs:
           keytool -list \
             -keystore "$RUNNER_TEMP/eshop-radar-release.jks" \
             -alias eshopradar \
-            -storepass "$ANDROID_KEYSTORE_PASSWORD" >/dev/null
+            -storepass:env ANDROID_KEYSTORE_PASSWORD >/dev/null
 
-      - name: Build signed Android APK and AAB
+      - name: Build unsigned Android APK and AAB
         shell: bash
         run: |
           set -euo pipefail
           BUILD_DIR="$RUNNER_TEMP/eshop-radar-twa"
-          mkdir -p "$BUILD_DIR"
+          BUBBLE_HOME="$RUNNER_TEMP/bubblewrap-home"
+          mkdir -p "$BUILD_DIR" "$BUBBLE_HOME"
           cp android/twa-manifest.json "$BUILD_DIR/twa-manifest.json"
           cp "$RUNNER_TEMP/eshop-radar-release.jks" "$BUILD_DIR/android.keystore"
 
           docker run --rm \
+            -v "$BUBBLE_HOME:/root/.bubblewrap" \
             -v "$BUILD_DIR:/workspace" \
             -w /workspace \
             ghcr.io/googlechromelabs/bubblewrap:latest \
@@ -71,30 +70,75 @@ jobs:
 
           set +o pipefail
           yes | docker run -i --rm \
-            -e BUBBLEWRAP_KEYSTORE_PASSWORD \
-            -e BUBBLEWRAP_KEY_PASSWORD \
+            -v "$BUBBLE_HOME:/root/.bubblewrap" \
             -v "$BUILD_DIR:/workspace" \
             -w /workspace \
             ghcr.io/googlechromelabs/bubblewrap:latest \
-            build --skipPwaValidation \
-            --manifest=/workspace/twa-manifest.json \
-            --signingKeyPath=/workspace/android.keystore \
-            --signingKeyAlias=eshopradar
+            build --skipSigning --skipPwaValidation --manifest=/workspace/twa-manifest.json
           BUILD_STATUS=${PIPESTATUS[1]}
           set -o pipefail
           test "$BUILD_STATUS" -eq 0
 
-          APK="$(find "$BUILD_DIR" -type f -name '*signed*.apk' | head -n 1)"
-          if [ -z "$APK" ]; then
-            APK="$(find "$BUILD_DIR" -type f -name '*.apk' | head -n 1)"
-          fi
-          test -n "$APK"
-          cp "$APK" Eshop-Radar.apk
+          test -f "$BUILD_DIR/app-release-unsigned-aligned.apk"
+          test -f "$BUILD_DIR/app/build/outputs/bundle/release/app-release.aab"
 
-          AAB="$(find "$BUILD_DIR" -type f -name '*.aab' | head -n 1 || true)"
-          if [ -n "$AAB" ]; then
-            cp "$AAB" Eshop-Radar.aab
-          fi
+      - name: Sign and verify APK without exposing the password to Bubblewrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_DIR="$RUNNER_TEMP/eshop-radar-twa"
+          BUBBLE_HOME="$RUNNER_TEMP/bubblewrap-home"
+
+          docker run --rm \
+            -e ANDROID_KEYSTORE_PASSWORD \
+            -v "$BUBBLE_HOME:/root/.bubblewrap" \
+            -v "$BUILD_DIR:/workspace" \
+            -w /workspace \
+            ghcr.io/googlechromelabs/bubblewrap:latest \
+            sh -lc '
+              set -eu
+              APKSIGNER="$(find /root/.bubblewrap/android_sdk/build-tools -type f -name apksigner | sort -V | tail -n 1)"
+              test -n "$APKSIGNER"
+              "$APKSIGNER" sign \
+                --ks /workspace/android.keystore \
+                --ks-key-alias eshopradar \
+                --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+                --key-pass env:ANDROID_KEYSTORE_PASSWORD \
+                --out /workspace/Eshop-Radar.apk \
+                /workspace/app-release-unsigned-aligned.apk
+              "$APKSIGNER" verify --verbose --print-certs /workspace/Eshop-Radar.apk
+            '
+
+          cp "$BUILD_DIR/Eshop-Radar.apk" Eshop-Radar.apk
+
+      - name: Sign Android App Bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_DIR="$RUNNER_TEMP/eshop-radar-twa"
+          cp "$BUILD_DIR/app/build/outputs/bundle/release/app-release.aab" "$BUILD_DIR/Eshop-Radar.aab"
+
+          docker run --rm \
+            -e ANDROID_KEYSTORE_PASSWORD \
+            -v "$RUNNER_TEMP/bubblewrap-home:/root/.bubblewrap" \
+            -v "$BUILD_DIR:/workspace" \
+            -w /workspace \
+            ghcr.io/googlechromelabs/bubblewrap:latest \
+            sh -lc '
+              set -eu
+              JARSIGNER="$(find /root/.bubblewrap/jdk -type f -name jarsigner | head -n 1)"
+              test -n "$JARSIGNER"
+              "$JARSIGNER" \
+                -sigalg SHA256withRSA \
+                -digestalg SHA-256 \
+                -keystore /workspace/android.keystore \
+                -storepass:env ANDROID_KEYSTORE_PASSWORD \
+                -keypass:env ANDROID_KEYSTORE_PASSWORD \
+                /workspace/Eshop-Radar.aab eshopradar
+              "$JARSIGNER" -verify /workspace/Eshop-Radar.aab
+            '
+
+          cp "$BUILD_DIR/Eshop-Radar.aab" Eshop-Radar.aab
 
       - name: Build source ZIP
         shell: bash
@@ -117,12 +161,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          assets=(Eshop-Radar.apk eshop-br-alert-source.zip)
-          if [ -f Eshop-Radar.aab ]; then
-            assets+=(Eshop-Radar.aab)
-          fi
-
-          gh release create "${GITHUB_REF_NAME}" "${assets[@]}" \
+          gh release create "${GITHUB_REF_NAME}" \
+            Eshop-Radar.apk \
+            Eshop-Radar.aab \
+            eshop-br-alert-source.zip \
             --repo "${GITHUB_REPOSITORY}" \
             --title "eShop BR Alert ${GITHUB_REF_NAME}" \
             --generate-notes
