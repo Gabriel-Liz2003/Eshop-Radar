@@ -1,2 +1,3 @@
 Release v1.7.0 retry
 Triggered after configuring ANDROID_KEYSTORE_PASSWORD.
+Retry with runner-side signing
