@@ -140,10 +140,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release create "${GITHUB_REF_NAME}" \
-            Eshop-Radar.apk \
-            Eshop-Radar.aab \
-            eshop-br-alert-source.zip \
-            --repo "${GITHUB_REPOSITORY}" \
-            --title "eShop BR Alert ${GITHUB_REF_NAME}" \
-            --generate-notes
+
+          RELEASE_TAG="v$(node -p "require('./version.json').version")"
+
+          # Limpa a release acidental criada com a branch "main" pela primeira versão do workflow.
+          if gh release view main --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release delete main --cleanup-tag -y --repo "${GITHUB_REPOSITORY}"
+          fi
+
+          if gh release view "$RELEASE_TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" \
+              Eshop-Radar.apk \
+              Eshop-Radar.aab \
+              eshop-br-alert-source.zip \
+              --clobber \
+              --repo "${GITHUB_REPOSITORY}"
+          else
+            gh release create "$RELEASE_TAG" \
+              Eshop-Radar.apk \
+              Eshop-Radar.aab \
+              eshop-br-alert-source.zip \
+              --repo "${GITHUB_REPOSITORY}" \
+              --target "${GITHUB_SHA}" \
+              --title "eShop BR Alert $RELEASE_TAG" \
+              --generate-notes
+          fi
