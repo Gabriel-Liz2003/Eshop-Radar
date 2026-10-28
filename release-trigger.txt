@@ -1,2 +1,2 @@
-Release v1.7.0
+Release v1.7.0 retry
 Triggered after configuring ANDROID_KEYSTORE_PASSWORD.
