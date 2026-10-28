@@ -61,13 +61,11 @@ jobs:
         run: |
           set -euo pipefail
           BUILD_DIR="$RUNNER_TEMP/eshop-radar-twa"
-          BUBBLE_HOME="$RUNNER_TEMP/bubblewrap-home"
-          mkdir -p "$BUILD_DIR" "$BUBBLE_HOME"
+          mkdir -p "$BUILD_DIR"
           cp android/twa-manifest.json "$BUILD_DIR/twa-manifest.json"
           cp "$RUNNER_TEMP/eshop-radar-release.jks" "$BUILD_DIR/android.keystore"
 
           docker run --rm \
-            -v "$BUBBLE_HOME:/root/.bubblewrap" \
             -v "$BUILD_DIR:/workspace" \
             -w /workspace \
             ghcr.io/googlechromelabs/bubblewrap:latest \
@@ -75,7 +73,6 @@ jobs:
 
           set +o pipefail
           yes | docker run -i --rm \
-            -v "$BUBBLE_HOME:/root/.bubblewrap" \
             -v "$BUILD_DIR:/workspace" \
             -w /workspace \
             ghcr.io/googlechromelabs/bubblewrap:latest \
@@ -87,63 +84,40 @@ jobs:
           test -f "$BUILD_DIR/app-release-unsigned-aligned.apk"
           test -f "$BUILD_DIR/app/build/outputs/bundle/release/app-release.aab"
 
-      - name: Sign and verify APK without exposing the password to Bubblewrap
+      - name: Sign and verify APK on GitHub runner
         shell: bash
         run: |
           set -euo pipefail
           BUILD_DIR="$RUNNER_TEMP/eshop-radar-twa"
-          BUBBLE_HOME="$RUNNER_TEMP/bubblewrap-home"
+          APKSIGNER="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
 
-          docker run --rm \
-            -e ANDROID_KEYSTORE_PASSWORD \
-            -v "$BUBBLE_HOME:/root/.bubblewrap" \
-            -v "$BUILD_DIR:/workspace" \
-            -w /workspace \
-            ghcr.io/googlechromelabs/bubblewrap:latest \
-            sh -lc '
-              set -eu
-              APKSIGNER="$(find /root/.bubblewrap/android_sdk/build-tools -type f -name apksigner | sort -V | tail -n 1)"
-              test -n "$APKSIGNER"
-              "$APKSIGNER" sign \
-                --ks /workspace/android.keystore \
-                --ks-key-alias eshopradar \
-                --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
-                --key-pass env:ANDROID_KEYSTORE_PASSWORD \
-                --out /workspace/Eshop-Radar.apk \
-                /workspace/app-release-unsigned-aligned.apk
-              "$APKSIGNER" verify --verbose --print-certs /workspace/Eshop-Radar.apk
-            '
+          "$APKSIGNER" sign \
+            --ks "$RUNNER_TEMP/eshop-radar-release.jks" \
+            --ks-key-alias eshopradar \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --key-pass env:ANDROID_KEYSTORE_PASSWORD \
+            --out Eshop-Radar.apk \
+            "$BUILD_DIR/app-release-unsigned-aligned.apk"
 
-          cp "$BUILD_DIR/Eshop-Radar.apk" Eshop-Radar.apk
+          "$APKSIGNER" verify --verbose --print-certs Eshop-Radar.apk
 
-      - name: Sign Android App Bundle
+      - name: Sign Android App Bundle on GitHub runner
         shell: bash
         run: |
           set -euo pipefail
           BUILD_DIR="$RUNNER_TEMP/eshop-radar-twa"
-          cp "$BUILD_DIR/app/build/outputs/bundle/release/app-release.aab" "$BUILD_DIR/Eshop-Radar.aab"
+          cp "$BUILD_DIR/app/build/outputs/bundle/release/app-release.aab" Eshop-Radar.aab
 
-          docker run --rm \
-            -e ANDROID_KEYSTORE_PASSWORD \
-            -v "$RUNNER_TEMP/bubblewrap-home:/root/.bubblewrap" \
-            -v "$BUILD_DIR:/workspace" \
-            -w /workspace \
-            ghcr.io/googlechromelabs/bubblewrap:latest \
-            sh -lc '
-              set -eu
-              JARSIGNER="$(find /root/.bubblewrap/jdk -type f -name jarsigner | head -n 1)"
-              test -n "$JARSIGNER"
-              "$JARSIGNER" \
-                -sigalg SHA256withRSA \
-                -digestalg SHA-256 \
-                -keystore /workspace/android.keystore \
-                -storepass:env ANDROID_KEYSTORE_PASSWORD \
-                -keypass:env ANDROID_KEYSTORE_PASSWORD \
-                /workspace/Eshop-Radar.aab eshopradar
-              "$JARSIGNER" -verify /workspace/Eshop-Radar.aab
-            '
+          jarsigner \
+            -sigalg SHA256withRSA \
+            -digestalg SHA-256 \
+            -keystore "$RUNNER_TEMP/eshop-radar-release.jks" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" \
+            -keypass "$ANDROID_KEYSTORE_PASSWORD" \
+            Eshop-Radar.aab eshopradar
 
-          cp "$BUILD_DIR/Eshop-Radar.aab" Eshop-Radar.aab
+          jarsigner -verify Eshop-Radar.aab
 
       - name: Build source ZIP
         shell: bash
