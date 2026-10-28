@@ -1,0 +1,2 @@
+Release v1.7.0
+Triggered after configuring ANDROID_KEYSTORE_PASSWORD.
