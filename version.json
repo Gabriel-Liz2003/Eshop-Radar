@@ -2,13 +2,13 @@
   "version": "1.7.1",
   "published_at": "2026-10-29",
   "notes": "Corrige os links dos jogos: o app agora abre a página oficial do produto na Nintendo Store Brasil em vez do redirect antigo do ec.nintendo.com.",
-  "download_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/archive/refs/heads/main.zip",
-  "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest",
+  "download_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest/download/eshop-br-alert-source.zip",
+  "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/tag/v1.7.1",
   "android": {
     "version": "1.7.0",
     "version_code": 10700,
     "package_id": "com.gabrieldeliz.eshopradar",
-    "apk_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest/download/Eshop-Radar.apk",
-    "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest"
+    "apk_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/download/v1.7.0/Eshop-Radar.apk",
+    "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/tag/v1.7.0"
   }
 }
