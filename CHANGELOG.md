@@ -1,5 +1,13 @@
 # Changelog
 
+
+## 1.7.1 — 2026-10-29
+
+- Corrige os links de jogos na lista de promoções e nas notificações individuais.
+- Passa a usar a URL oficial retornada pelo catálogo da Nintendo para `nintendo.com/pt-br/store/products/...`.
+- Histórico antigo é enriquecido com a URL atual do mesmo jogo sem precisar limpar os dados.
+- Remove o uso do redirect antigo `ec.nintendo.com/titles/.../redirect`.
+
 ## 1.7.0 — 2026-10-26
 
 - Adiciona APK Android oficial via Trusted Web Activity (TWA).
