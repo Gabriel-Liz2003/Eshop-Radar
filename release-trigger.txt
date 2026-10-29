@@ -2,3 +2,4 @@ Release v1.7.0 retry
 Triggered after configuring ANDROID_KEYSTORE_PASSWORD.
 Retry with runner-side signing
 Retry release with semantic tag v1.7.0
+Release v1.7.1 web/PWA only
