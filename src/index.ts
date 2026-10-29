@@ -27,7 +27,7 @@ import {
   ICON_MASKABLE_512_BASE64,
 } from "./pwa-assets";
 
-const APP_VERSION = "1.7.0";
+const APP_VERSION = "1.7.1";
 const PROJECT_URL = "https://github.com/Gabriel-Liz2003/Eshop-Radar";
 const UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Gabriel-Liz2003/Eshop-Radar/main/version.json";
 const ANDROID_PACKAGE_ID = "com.gabrieldeliz.eshopradar";
@@ -69,6 +69,8 @@ interface SaleSnapshot {
   k: string;
   n: string;
   ids: string[];
+  /** Página oficial do produto na Nintendo Store Brasil. */
+  u?: string;
 }
 
 interface KnownSale extends SaleSnapshot {
@@ -232,6 +234,41 @@ function collectTitleIds(value: unknown, out = new Set<string>(), depth = 0): Se
   return out;
 }
 
+function normalizeNintendoProductUrl(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+
+  try {
+    const parsed = new URL(value.trim(), "https://www.nintendo.com");
+    const hostname = parsed.hostname.toLowerCase();
+    if (hostname !== "nintendo.com" && hostname !== "www.nintendo.com") return undefined;
+
+    let pathname = parsed.pathname.replace(/\/+/g, "/");
+    if (pathname.startsWith("/store/products/")) {
+      pathname = `/pt-br${pathname}`;
+    }
+    if (!pathname.startsWith("/pt-br/store/products/")) return undefined;
+
+    return `https://www.nintendo.com${pathname}${parsed.search}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function nintendoProductUrl(sale: SaleSnapshot): string {
+  const official = normalizeNintendoProductUrl(sale.u);
+  if (official) return official;
+
+  // Compatibilidade com registros antigos que ainda não tinham o campo url.
+  // A Nintendo também mantém páginas de produto identificadas pelo NSUID.
+  const titleId = sale.ids[0];
+  if (titleId) {
+    return `https://www.nintendo.com/pt-br/store/products/${encodeURIComponent(titleId)}/`;
+  }
+
+  // Último fallback: pesquisa oficial da Nintendo Brasil, nunca o redirect antigo do ec.nintendo.com.
+  return `https://www.nintendo.com/pt-br/search/?q=${encodeURIComponent(sale.n)}`;
+}
+
 function toSaleSnapshot(raw: unknown): SaleSnapshot | null {
   if (!raw || typeof raw !== "object") return null;
   const item = raw as Record<string, unknown>;
@@ -250,7 +287,8 @@ function toSaleSnapshot(raw: unknown): SaleSnapshot | null {
 
   const objectId = item.objectID != null ? String(item.objectID) : undefined;
   const rawKey = objectId ?? (item.id != null ? String(item.id) : [...ids][0] ?? fallbackHash(name));
-  return { k: rawKey, n: name, ids: [...ids] };
+  const productUrl = normalizeNintendoProductUrl(item.url);
+  return { k: rawKey, n: name, ids: [...ids], ...(productUrl ? { u: productUrl } : {}) };
 }
 
 async function ensureDb(env: Env): Promise<void> {
@@ -743,8 +781,7 @@ async function publishPush(env: Env, sale: SaleSnapshot, price: PriceInfo | null
   const regularText = price?.regular ? `de ${price.regular} por ${discountText}` : discountText;
   const percentText = price?.percent != null ? ` (-${price.percent}%)` : "";
   const endText = formatDate(price?.end);
-  const titleId = sale.ids[0];
-  const click = titleId ? `https://ec.nintendo.com/titles/${encodeURIComponent(titleId)}/redirect` : undefined;
+  const click = nintendoProductUrl(sale);
 
   const body = [
     regularText + percentText,
@@ -1267,11 +1304,18 @@ function adminPage(state: AppState, env: Env, subscriptions: number): string {
     ? state.recent.map((event, index) => {
         const when = formatDate(event.at) ?? event.at;
         const rows = event.sales.map((sale) => {
-          const titleId = sale.ids[0];
+          // Eventos antigos (salvos antes da v1.7.1) não possuem "u".
+          // Como "known" é atualizado a cada varredura, enriquecemos o histórico
+          // com a URL oficial atual do mesmo jogo sem apagar o histórico.
+          const current = state.known[sale.k];
+          const enrichedSale: SaleSnapshot = {
+            ...sale,
+            ...(current?.u ? { u: current.u } : {}),
+            ids: sale.ids?.length ? sale.ids : (current?.ids ?? []),
+          };
           const label = escapeHtml(sale.n);
-          return titleId
-            ? `<li><a href="https://ec.nintendo.com/titles/${encodeURIComponent(titleId)}/redirect" target="_blank" rel="noopener">${label}</a></li>`
-            : `<li>${label}</li>`;
+          const href = escapeHtml(nintendoProductUrl(enrichedSale));
+          return `<li><a href="${href}" target="_blank" rel="noopener">${label}</a></li>`;
         }).join("");
         return `<details ${index === 0 ? "open" : ""}><summary><b>${event.sales.length} jogo${event.sales.length === 1 ? "" : "s"}</b> · ${escapeHtml(when)}</summary><ul class="recent-list">${rows}</ul></details>`;
       }).join("")
@@ -1553,7 +1597,7 @@ async function addCustomTerm(env: Env, term: string): Promise<AppState> {
   for (const sale of Object.values(state.known)) {
     if (sale.a === 1 && normalize(sale.n).includes(normalize(clean))) {
       if (!state.pending.some((item) => item.k === sale.k)) {
-        state.pending.push({ k: sale.k, n: sale.n, ids: sale.ids });
+        state.pending.push({ k: sale.k, n: sale.n, ids: sale.ids, ...(sale.u ? { u: sale.u } : {}) });
       }
     }
   }
@@ -1570,7 +1614,7 @@ async function removeCustomTerm(env: Env, term: string): Promise<AppState> {
 }
 
 function serviceWorkerScript(): string {
-  return `const CACHE = 'eshop-br-alert-v1.7.0';
+  return `const CACHE = 'eshop-br-alert-v1.7.1';
 const STATIC = ['/offline','/manifest.webmanifest','/icon-192.png','/icon-512.png','/icon-maskable-512.png'];
 self.addEventListener('install', event => {
   self.skipWaiting();
