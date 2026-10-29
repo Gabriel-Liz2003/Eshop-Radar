@@ -32,7 +32,27 @@ jobs:
       - name: Typecheck Worker
         run: npm run typecheck
 
+      - name: Detect release type
+        id: release_type
+        shell: bash
+        run: |
+          set -euo pipefail
+          WEB_VERSION="$(node -p "require('./version.json').version")"
+          ANDROID_VERSION="$(node -p "require('./version.json').android?.version || ''")"
+
+          echo "web_version=$WEB_VERSION" >> "$GITHUB_OUTPUT"
+          echo "android_version=$ANDROID_VERSION" >> "$GITHUB_OUTPUT"
+
+          if [ "$WEB_VERSION" = "$ANDROID_VERSION" ]; then
+            echo "build_android=true" >> "$GITHUB_OUTPUT"
+            echo "Release com APK/AAB: v$WEB_VERSION"
+          else
+            echo "build_android=false" >> "$GITHUB_OUTPUT"
+            echo "Release somente Worker/PWA: v$WEB_VERSION (APK permanece v$ANDROID_VERSION)"
+          fi
+
       - name: Ensure Android signing secret exists
+        if: steps.release_type.outputs.build_android == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -42,6 +62,7 @@ jobs:
           fi
 
       - name: Decrypt Android signing key
+        if: steps.release_type.outputs.build_android == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -57,6 +78,7 @@ jobs:
             -storepass:env ANDROID_KEYSTORE_PASSWORD >/dev/null
 
       - name: Build unsigned Android APK and AAB
+        if: steps.release_type.outputs.build_android == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -85,6 +107,7 @@ jobs:
           test -f "$BUILD_DIR/app/build/outputs/bundle/release/app-release.aab"
 
       - name: Sign and verify APK on GitHub runner
+        if: steps.release_type.outputs.build_android == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -103,6 +126,7 @@ jobs:
           "$APKSIGNER" verify --verbose --print-certs Eshop-Radar.apk
 
       - name: Sign Android App Bundle on GitHub runner
+        if: steps.release_type.outputs.build_android == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -141,25 +165,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          RELEASE_TAG="v$(node -p "require('./version.json').version")"
+          RELEASE_TAG="v${{ steps.release_type.outputs.web_version }}"
+          assets=(eshop-br-alert-source.zip)
 
-          # Limpa a release acidental criada com a branch "main" pela primeira versão do workflow.
+          if [ "${{ steps.release_type.outputs.build_android }}" = "true" ]; then
+            assets+=(Eshop-Radar.apk Eshop-Radar.aab)
+          fi
+
           if gh release view main --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             gh release delete main --cleanup-tag -y --repo "${GITHUB_REPOSITORY}"
           fi
 
           if gh release view "$RELEASE_TAG" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" \
-              Eshop-Radar.apk \
-              Eshop-Radar.aab \
-              eshop-br-alert-source.zip \
+            gh release upload "$RELEASE_TAG" "${assets[@]}" \
               --clobber \
               --repo "${GITHUB_REPOSITORY}"
           else
-            gh release create "$RELEASE_TAG" \
-              Eshop-Radar.apk \
-              Eshop-Radar.aab \
-              eshop-br-alert-source.zip \
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
               --repo "${GITHUB_REPOSITORY}" \
               --target "${GITHUB_SHA}" \
               --title "eShop BR Alert $RELEASE_TAG" \
