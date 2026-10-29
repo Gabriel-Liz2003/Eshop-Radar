@@ -28,7 +28,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Check Cloudflare CI credentials
         id: cloudflare
@@ -46,7 +45,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.cloudflare.outputs.ready == 'true'
-        run: npm ci
+        run: npm install
 
       - name: Typecheck
         if: steps.cloudflare.outputs.ready == 'true'
