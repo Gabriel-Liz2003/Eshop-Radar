@@ -1,7 +1,7 @@
 {
-  "version": "1.7.0",
-  "published_at": "2026-10-26",
-  "notes": "Adiciona verificação de atualizações no PWA e suporte oficial a APK Android via Trusted Web Activity.",
+  "version": "1.7.1",
+  "published_at": "2026-10-29",
+  "notes": "Corrige os links dos jogos: o app agora abre a página oficial do produto na Nintendo Store Brasil em vez do redirect antigo do ec.nintendo.com.",
   "download_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest/download/eshop-br-alert-source.zip",
   "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest",
   "android": {
