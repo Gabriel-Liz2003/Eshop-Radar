@@ -27,7 +27,7 @@ import {
   ICON_MASKABLE_512_BASE64,
 } from "./pwa-assets";
 
-const APP_VERSION = "1.7.1";
+const APP_VERSION = "1.7.2";
 const PROJECT_URL = "https://github.com/Gabriel-Liz2003/Eshop-Radar";
 const UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Gabriel-Liz2003/Eshop-Radar/main/version.json";
 const ANDROID_PACKAGE_ID = "com.gabrieldeliz.eshopradar";
@@ -1550,21 +1550,35 @@ async function checkForUpdates(manual = false) {
 
     const webUpdate = !!data.updateAvailable;
     const androidUpdate = !!data.android?.updateAvailable;
+    const runningInAndroid = !!androidWrapperVersion;
 
-    if (webUpdate) {
-      addDownloadButton('⬇️ Baixar atualização do projeto', data.downloadUrl || data.releaseUrl || data.projectUrl);
-    }
+    // O ZIP de source NÃO é um pacote instalável no Android. Dentro do APK,
+    // só oferecemos download quando existe uma versão nova do APK propriamente dito.
     if (androidUpdate) {
       addDownloadButton('📱 Baixar APK v' + data.android.latestVersion, data.android.apkUrl || data.android.releaseUrl);
+    } else if (webUpdate && !runningInAndroid) {
+      addDownloadButton('🔗 Ver atualização no GitHub', data.releaseUrl || data.projectUrl);
     }
 
-    if (webUpdate || androidUpdate) {
-      const parts = [];
-      if (webUpdate) parts.push('Web/PWA v' + data.latestVersion + ' disponível (instalada: v' + data.currentVersion + ')');
-      if (androidUpdate) parts.push('APK v' + data.android.latestVersion + ' disponível (instalado: v' + data.android.currentVersion + ')');
-      status.textContent = '⬆️ ' + parts.join(' · ') + (data.notes ? '. ' + data.notes : '');
-    } else if (androidWrapperVersion && data.android?.latestVersion) {
-      status.textContent = '✅ Web/PWA v' + data.currentVersion + ' e APK v' + data.android.currentVersion + ' estão atualizados.';
+    if (androidUpdate) {
+      const webPart = webUpdate
+        ? ' · serviço web v' + data.latestVersion + ' também disponível'
+        : '';
+      status.textContent = '⬆️ APK v' + data.android.latestVersion
+        + ' disponível (instalado: v' + data.android.currentVersion + ')' + webPart
+        + (data.notes ? '. ' + data.notes : '');
+    } else if (webUpdate && runningInAndroid) {
+      status.textContent = '🌐 Atualização do serviço web v' + data.latestVersion
+        + ' disponível. Seu APK v' + data.android.currentVersion
+        + ' continua atual e não precisa ser reinstalado. O código do Worker/PWA precisa ser atualizado.'
+        + (data.notes ? ' ' + data.notes : '');
+    } else if (webUpdate) {
+      status.textContent = '🌐 Nova versão do Worker/PWA v' + data.latestVersion
+        + ' disponível (atual: v' + data.currentVersion + ').'
+        + (data.notes ? ' ' + data.notes : '');
+    } else if (runningInAndroid && data.android?.latestVersion) {
+      status.textContent = '✅ Web/PWA v' + data.currentVersion
+        + ' e APK v' + data.android.currentVersion + ' estão atualizados.';
     } else {
       status.textContent = '✅ Você está na versão mais recente: v' + data.currentVersion + '.';
     }
@@ -1614,7 +1628,7 @@ async function removeCustomTerm(env: Env, term: string): Promise<AppState> {
 }
 
 function serviceWorkerScript(): string {
-  return `const CACHE = 'eshop-br-alert-v1.7.1';
+  return `const CACHE = 'eshop-br-alert-v1.7.2';
 const STATIC = ['/offline','/manifest.webmanifest','/icon-192.png','/icon-512.png','/icon-maskable-512.png'];
 self.addEventListener('install', event => {
   self.skipWaiting();
