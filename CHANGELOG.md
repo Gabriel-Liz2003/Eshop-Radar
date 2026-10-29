@@ -1,6 +1,14 @@
 # Changelog
 
 
+
+## 1.7.2 — 2026-10-29
+
+- Corrige o fluxo de atualização dentro do APK.
+- O app Android não oferece mais o ZIP de código-fonte como se fosse instalável.
+- Dentro do APK, só aparece botão de download quando existe uma versão nova de `Eshop-Radar.apk`.
+- Atualizações somente do Worker/PWA passam a ser mostradas como atualização do serviço web, sem download de ZIP.
+
 ## 1.7.1 — 2026-10-29
 
 - Corrige os links de jogos na lista de promoções e nas notificações individuais.
