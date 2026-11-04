@@ -6,3 +6,4 @@ Release v1.7.1 web/PWA only
 Release v1.7.2 web/PWA only
 Release v1.7.4 web/PWA only
 Publish signed Android v1.7.4 notification repair
+Publish signed Android v1.7.5 updater fix
