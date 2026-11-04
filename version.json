@@ -1,14 +1,14 @@
 {
-  "version": "1.7.4",
+  "version": "1.7.5",
   "published_at": "2026-11-04",
-  "notes": "Repara inscrições Web Push, adiciona diagnóstico de envio e corrige o APK Android para solicitar a permissão nativa de notificações no Android 13+.",
+  "notes": "Separa claramente a versão Web/PWA da versão do APK Android e corrige o updater interno para sempre oferecer o APK mais recente dentro do app.",
   "download_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest/download/eshop-br-alert-source.zip",
-  "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/tag/v1.7.4",
+  "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/tag/v1.7.5",
   "android": {
-    "version": "1.7.4",
-    "version_code": 10704,
+    "version": "1.7.5",
+    "version_code": 10705,
     "package_id": "com.gabrieldeliz.eshopradar",
-    "apk_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/download/v1.7.4/Eshop-Radar.apk",
-    "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/tag/v1.7.4"
+    "apk_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/download/v1.7.5/Eshop-Radar.apk",
+    "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/tag/v1.7.5"
   }
 }
