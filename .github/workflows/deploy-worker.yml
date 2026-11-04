@@ -58,6 +58,17 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --keep-vars
 
+      - name: Check production monitor status
+        if: steps.cloudflare.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 2
+          curl --fail --silent --show-error \
+            "https://eshop-br-alert.gabriel-liz2003.workers.dev/status" \
+            | tee production-status.json
+          echo
+
       - name: Deployment not configured
         if: steps.cloudflare.outputs.ready != 'true'
         run: |
