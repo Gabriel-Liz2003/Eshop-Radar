@@ -27,7 +27,7 @@ import {
   ICON_MASKABLE_512_BASE64,
 } from "./pwa-assets";
 
-const APP_VERSION = "1.7.4";
+const APP_VERSION = "1.7.5";
 const PROJECT_URL = "https://github.com/Gabriel-Liz2003/Eshop-Radar";
 const UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Gabriel-Liz2003/Eshop-Radar/main/version.json";
 const ANDROID_PACKAGE_ID = "com.gabrieldeliz.eshopradar";
@@ -1437,7 +1437,8 @@ function adminPage(state: AppState, env: Env, subscriptions: number): string {
 </div>
 <div class="card" id="updates">
   <h2>🔄 Atualizações</h2>
-  <p>Versão instalada: <b>v${APP_VERSION}</b></p>
+  <p>Versão Web/PWA: <b>v${APP_VERSION}</b></p>
+  <p id="android-version-row" class="muted" hidden>APK Android instalado: <b id="android-current-version">desconhecido</b></p>
   <p class="muted">O app consulta o repositório oficial no GitHub. A verificação automática ocorre no máximo uma vez a cada 6 horas, e você também pode verificar manualmente.</p>
   <div class="actions"><button type="button" id="check-update">Verificar atualizações</button>
   <a href="${PROJECT_URL}" target="_blank" rel="noopener" style="text-decoration:none"><button type="button" class="ghost">Abrir GitHub</button></a></div>
@@ -1467,6 +1468,13 @@ try {
   }
   androidWrapperVersion = localStorage.getItem('eshop-android-wrapper-version');
 } catch {}
+
+const androidVersionRow = document.getElementById('android-version-row');
+const androidCurrentVersionLabel = document.getElementById('android-current-version');
+if (androidWrapperVersion && androidVersionRow && androidCurrentVersionLabel) {
+  androidVersionRow.hidden = false;
+  androidCurrentVersionLabel.textContent = 'v' + androidWrapperVersion;
+}
 
 async function registerSW() {
   if (!('serviceWorker' in navigator)) return null;
@@ -1623,13 +1631,17 @@ async function checkForUpdates(manual = false) {
     localStorage.setItem('eshop-last-update-check', String(Date.now()));
 
     const webUpdate = !!data.updateAvailable;
-    const androidUpdate = !!data.android?.updateAvailable;
-    const runningInAndroid = !!androidWrapperVersion;
+    const runningInAndroid = !!androidWrapperVersion || new URLSearchParams(location.search).get('source') === 'android';
+    const androidCurrent = data.android?.currentVersion || androidWrapperVersion || null;
+    const androidLatest = data.android?.latestVersion || null;
+    const androidUpdate = !!data.android?.updateAvailable
+      || !!(runningInAndroid && androidLatest && (!androidCurrent || androidCurrent !== androidLatest));
 
-    // O ZIP de source NÃO é um pacote instalável no Android. Dentro do APK,
-    // só oferecemos download quando existe uma versão nova do APK propriamente dito.
-    if (androidUpdate) {
-      addDownloadButton('📱 Baixar APK v' + data.android.latestVersion, data.android.apkUrl || data.android.releaseUrl);
+    if (runningInAndroid && androidLatest && data.android?.apkUrl) {
+      addDownloadButton(
+        androidUpdate ? ('📱 Atualizar APK para v' + androidLatest) : ('📱 Baixar novamente APK v' + androidLatest),
+        data.android.apkUrl
+      );
     } else if (webUpdate && !runningInAndroid) {
       addDownloadButton('🔗 Ver atualização no GitHub', data.releaseUrl || data.projectUrl);
     }
@@ -1710,7 +1722,7 @@ async function removeCustomTerm(env: Env, term: string): Promise<AppState> {
 }
 
 function serviceWorkerScript(): string {
-  return `const CACHE = 'eshop-br-alert-v1.7.4';
+  return `const CACHE = 'eshop-br-alert-v1.7.5';
 const STATIC = ['/offline','/manifest.webmanifest','/icon-192.png','/icon-512.png','/icon-maskable-512.png'];
 self.addEventListener('install', event => {
   self.skipWaiting();
