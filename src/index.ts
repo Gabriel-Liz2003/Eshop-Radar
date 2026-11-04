@@ -27,7 +27,7 @@ import {
   ICON_MASKABLE_512_BASE64,
 } from "./pwa-assets";
 
-const APP_VERSION = "1.7.2";
+const APP_VERSION = "1.7.3";
 const PROJECT_URL = "https://github.com/Gabriel-Liz2003/Eshop-Radar";
 const UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Gabriel-Liz2003/Eshop-Radar/main/version.json";
 const ANDROID_PACKAGE_ID = "com.gabrieldeliz.eshopradar";
@@ -1496,27 +1496,66 @@ function urlBase64ToUint8Array(base64String) {
   const rawData = atob(base64);
   return Uint8Array.from([...rawData].map(ch => ch.charCodeAt(0)));
 }
-async function enablePush() {
+async function syncPushSubscription({ askPermission = false, silent = false } = {}) {
   const status = document.getElementById('push-status');
   const button = document.getElementById('enable-push');
+
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+    if (!silent && status) status.textContent = '❌ Este navegador não oferece Web Push. Tente Chrome ou Brave atualizado.';
+    return false;
+  }
+
   try {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) throw new Error('Este navegador não oferece Web Push. Tente Chrome ou Brave atualizado.');
-    button.disabled = true;
-    status.textContent = 'Pedindo permissão...';
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') throw new Error('Permissão de notificações não concedida.');
-    const registration = await navigator.serviceWorker.register('/sw.js');
+    if (button) button.disabled = true;
+
+    let permission = Notification.permission;
+    if (permission !== 'granted' && askPermission) {
+      if (status) status.textContent = 'Pedindo permissão...';
+      permission = await Notification.requestPermission();
+    }
+    if (permission !== 'granted') {
+      if (!silent && status) status.textContent = permission === 'denied'
+        ? '❌ As notificações estão bloqueadas nas permissões do Android/Brave.'
+        : '❌ Permissão de notificações não concedida.';
+      return false;
+    }
+
+    const registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
     await navigator.serviceWorker.ready;
+    await registration.update().catch(() => undefined);
+
     let subscription = await registration.pushManager.getSubscription();
     if (!subscription) {
-      subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) });
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+      });
     }
-    const response = await fetch('/admin/push/subscribe', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(subscription) });
+
+    // Mesmo que a inscrição já exista no navegador, reenviamos ao Worker.
+    // Assim o D1 se autorrepara se a linha tiver sido removida após um 404/410.
+    const response = await fetch('/admin/push/subscribe', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(subscription),
+      cache:'no-store',
+    });
     if (!response.ok) throw new Error('Falha ao salvar inscrição: HTTP ' + response.status);
-    status.textContent = '✅ Notificações ativadas neste celular. Atualize a página para ver a contagem.';
+
+    if (status) status.textContent = silent
+      ? '✅ Notificações sincronizadas automaticamente.'
+      : '✅ Notificações ativadas e sincronizadas neste celular.';
+    return true;
   } catch (error) {
-    status.textContent = '❌ ' + (error?.message || String(error));
-  } finally { button.disabled = false; }
+    if (!silent && status) status.textContent = '❌ ' + (error?.message || String(error));
+    return false;
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function enablePush() {
+  await syncPushSubscription({ askPermission: true, silent: false });
 }
 async function checkForUpdates(manual = false) {
   const button = document.getElementById('check-update');
@@ -1598,6 +1637,14 @@ try {
 } catch {}
 
 document.getElementById('enable-push')?.addEventListener('click', enablePush);
+
+// Auto-reparo: se o usuário já concedeu permissão, ressincroniza o endpoint
+// com o D1 a cada abertura do painel, sem abrir prompt nem gerar notificação.
+try {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    setTimeout(() => syncPushSubscription({ askPermission: false, silent: true }), 700);
+  }
+} catch {}
 </script>
 </body></html>`;
 }
@@ -1630,7 +1677,7 @@ async function removeCustomTerm(env: Env, term: string): Promise<AppState> {
 }
 
 function serviceWorkerScript(): string {
-  return `const CACHE = 'eshop-br-alert-v1.7.2';
+  return `const CACHE = 'eshop-br-alert-v1.7.3';
 const STATIC = ['/offline','/manifest.webmanifest','/icon-192.png','/icon-512.png','/icon-maskable-512.png'];
 self.addEventListener('install', event => {
   self.skipWaiting();
