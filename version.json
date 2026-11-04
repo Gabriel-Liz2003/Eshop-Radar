@@ -1,14 +1,14 @@
 {
   "version": "1.7.4",
   "published_at": "2026-11-04",
-  "notes": "Repara automaticamente inscrições Web Push presas a uma chave VAPID antiga e adiciona diagnóstico persistente do último envio/erro de push.",
+  "notes": "Repara inscrições Web Push, adiciona diagnóstico de envio e corrige o APK Android para solicitar a permissão nativa de notificações no Android 13+.",
   "download_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest/download/eshop-br-alert-source.zip",
   "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/tag/v1.7.4",
   "android": {
-    "version": "1.7.0",
-    "version_code": 10700,
+    "version": "1.7.4",
+    "version_code": 10704,
     "package_id": "com.gabrieldeliz.eshopradar",
-    "apk_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/download/v1.7.0/Eshop-Radar.apk",
-    "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/tag/v1.7.0"
+    "apk_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/download/v1.7.4/Eshop-Radar.apk",
+    "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/tag/v1.7.4"
   }
 }
