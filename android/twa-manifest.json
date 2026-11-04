@@ -4,7 +4,10 @@
   "name": "eShop BR Alert",
   "launcherName": "eShop Radar",
   "display": "standalone",
-  "displayOverride": ["standalone", "minimal-ui"],
+  "displayOverride": [
+    "standalone",
+    "minimal-ui"
+  ],
   "themeColor": "#0f1115",
   "themeColorDark": "#0f1115",
   "navigationColor": "#0f1115",
@@ -13,7 +16,7 @@
   "navigationDividerColorDark": "#0f1115",
   "backgroundColor": "#0f1115",
   "enableNotifications": true,
-  "startUrl": "/app?source=android&apk=1.7.0",
+  "startUrl": "/app?source=android&apk=1.7.4",
   "iconUrl": "https://eshop-br-alert.gabriel-liz2003.workers.dev/icon-512.png",
   "maskableIconUrl": "https://eshop-br-alert.gabriel-liz2003.workers.dev/icon-maskable-512.png",
   "splashScreenFadeOutDuration": 300,
@@ -21,8 +24,8 @@
     "path": "./android.keystore",
     "alias": "eshopradar"
   },
-  "appVersion": "1.7.0",
-  "appVersionCode": 10700,
+  "appVersion": "1.7.4",
+  "appVersionCode": 10704,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://eshop-br-alert.gabriel-liz2003.workers.dev/manifest.webmanifest",
