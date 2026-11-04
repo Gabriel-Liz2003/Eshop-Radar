@@ -1,9 +1,9 @@
 {
-  "version": "1.7.2",
-  "published_at": "2026-10-29",
-  "notes": "Corrige o verificador de atualizações: o APK não oferece mais o ZIP de código-fonte como se fosse uma atualização instalável. Dentro do Android, só aparece download quando existe um APK novo de verdade.",
+  "version": "1.7.4",
+  "published_at": "2026-11-04",
+  "notes": "Repara automaticamente inscrições Web Push presas a uma chave VAPID antiga e adiciona diagnóstico persistente do último envio/erro de push.",
   "download_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/latest/download/eshop-br-alert-source.zip",
-  "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/tag/v1.7.2",
+  "release_url": "https://github.com/Gabriel-Liz2003/Eshop-Radar/releases/tag/v1.7.4",
   "android": {
     "version": "1.7.0",
     "version_code": 10700,
