@@ -27,7 +27,7 @@ import {
   ICON_MASKABLE_512_BASE64,
 } from "./pwa-assets";
 
-const APP_VERSION = "1.7.3";
+const APP_VERSION = "1.7.4";
 const PROJECT_URL = "https://github.com/Gabriel-Liz2003/Eshop-Radar";
 const UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/Gabriel-Liz2003/Eshop-Radar/main/version.json";
 const ANDROID_PACKAGE_ID = "com.gabrieldeliz.eshopradar";
@@ -97,6 +97,8 @@ interface AppState {
   lastRunAt: string | null;
   lastCycleAt: string | null;
   lastError: string | null;
+  lastPushAt: string | null;
+  lastPushError: string | null;
   lastTotal: number;
   lastAddedCount: number;
   lastRemovedCount: number;
@@ -167,6 +169,8 @@ const defaultState = (): AppState => ({
   lastRunAt: null,
   lastCycleAt: null,
   lastError: null,
+  lastPushAt: null,
+  lastPushError: null,
   lastTotal: 0,
   lastAddedCount: 0,
   lastRemovedCount: 0,
@@ -904,13 +908,17 @@ async function flushPending(env: Env, state: AppState): Promise<void> {
       const price = sale.ids[0] ? await fetchPrice(sale.ids[0]) : null;
       await publishPush(env, sale, price, key);
       await markPushSent(env, key);
+      state.lastPushAt = new Date().toISOString();
+      state.lastPushError = null;
       processed.add(sale.k);
       pushMessages += 1;
       gamesAlerted += 1;
       return true;
     } catch (error) {
       await releasePushAttempt(env, key).catch(() => undefined);
-      state.lastError = `Falha ao notificar ${sale.n}: ${error instanceof Error ? error.message : String(error)}`;
+      const pushError = `Falha ao notificar ${sale.n}: ${error instanceof Error ? error.message : String(error)}`;
+      state.lastError = pushError;
+      state.lastPushError = pushError;
       return false;
     }
   };
@@ -932,12 +940,16 @@ async function flushPending(env: Env, state: AppState): Promise<void> {
         try {
           await publishGroupedPush(env, remainingNormal, key);
           await markPushSent(env, key);
+          state.lastPushAt = new Date().toISOString();
+          state.lastPushError = null;
           for (const sale of remainingNormal) processed.add(sale.k);
           pushMessages += 1;
           gamesAlerted += remainingNormal.length;
         } catch (error) {
           await releasePushAttempt(env, key).catch(() => undefined);
-          state.lastError = `Falha ao enviar alertas: ${error instanceof Error ? error.message : String(error)}`;
+          const pushError = `Falha ao enviar alertas: ${error instanceof Error ? error.message : String(error)}`;
+          state.lastError = pushError;
+          state.lastPushError = pushError;
         }
       }
     } else {
@@ -1082,6 +1094,8 @@ function publicStatus(state: AppState, pushSubscriptions: number, pushConfigured
     cyclesCompleted: state.cycles,
     recentEvents: state.recent.slice(0, 3).map((event) => ({ at: event.at, count: event.sales.length })),
     lastError: state.lastError,
+    lastPushAt: state.lastPushAt,
+    lastPushError: state.lastPushError,
   };
 }
 
@@ -1524,11 +1538,30 @@ async function syncPushSubscription({ askPermission = false, silent = false } = 
     await navigator.serviceWorker.ready;
     await registration.update().catch(() => undefined);
 
+    const expectedServerKey = urlBase64ToUint8Array(vapidPublicKey);
     let subscription = await registration.pushManager.getSubscription();
+
+    // Se o Worker estiver usando outra chave VAPID do que a usada quando o
+    // navegador criou esta inscrição, o endpoint pode continuar existindo mas
+    // nunca receber nossos pushes. Nesse caso recriamos a inscrição na hora.
+    if (subscription) {
+      const currentKey = subscription.options?.applicationServerKey
+        ? new Uint8Array(subscription.options.applicationServerKey)
+        : null;
+      const sameKey = !!currentKey
+        && currentKey.length === expectedServerKey.length
+        && currentKey.every((value, index) => value === expectedServerKey[index]);
+
+      if (!sameKey) {
+        await subscription.unsubscribe().catch(() => undefined);
+        subscription = null;
+      }
+    }
+
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        applicationServerKey: expectedServerKey,
       });
     }
 
@@ -1677,7 +1710,7 @@ async function removeCustomTerm(env: Env, term: string): Promise<AppState> {
 }
 
 function serviceWorkerScript(): string {
-  return `const CACHE = 'eshop-br-alert-v1.7.3';
+  return `const CACHE = 'eshop-br-alert-v1.7.4';
 const STATIC = ['/offline','/manifest.webmanifest','/icon-192.png','/icon-512.png','/icon-maskable-512.png'];
 self.addEventListener('install', event => {
   self.skipWaiting();
