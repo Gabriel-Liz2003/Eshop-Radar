@@ -1058,13 +1058,15 @@ async function validPairCode(env: Env, candidate: string): Promise<boolean> {
   return candidate === current || candidate === previous;
 }
 
-function publicStatus(state: AppState): Record<string, unknown> {
+function publicStatus(state: AppState, pushSubscriptions: number, pushConfigured: boolean): Record<string, unknown> {
   const active = Object.values(state.known).filter((sale) => sale.a === 1).length;
   return {
     service: "eShop BR Alert",
     version: APP_VERSION,
     mode: "todos-os-jogos",
     initialized: state.initialized,
+    pushConfigured,
+    pushSubscriptions,
     lastRunAt: state.lastRunAt,
     lastCycleAt: state.lastCycleAt,
     promotionsSeen: state.lastTotal,
@@ -1736,7 +1738,9 @@ export default {
 
     if (url.pathname === "/" || url.pathname === "/status") {
       const state = await loadState(env);
-      return jsonResponse(publicStatus(state));
+      const subscriptions = await pushSubscriptionCount(env);
+      const pushConfigured = !!(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
+      return jsonResponse(publicStatus(state, subscriptions, pushConfigured));
     }
 
     // O link privado antigo continua válido. Na primeira abertura, ele cria
