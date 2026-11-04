@@ -58,6 +58,22 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy --keep-vars
 
+      - name: Check live Worker health
+        if: steps.cloudflare.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            if curl --fail --silent --show-error \
+              https://eshop-br-alert.gabriel-liz2003.workers.dev/status \
+              -o worker-status.json; then
+              cat worker-status.json
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
       - name: Check production monitor status
         if: steps.cloudflare.outputs.ready == 'true'
         shell: bash
