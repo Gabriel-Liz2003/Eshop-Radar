@@ -1265,13 +1265,13 @@ function manifestResponse(): Response {
     theme_color: "#0f1115",
     categories: ["games", "shopping", "utilities"],
     icons: [
-      { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-      { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      { src: "/icon-192.png?v=174", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/icon-512.png?v=174", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/icon-maskable-512.png?v=174", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
     shortcuts: [
-      { name: "Painel", short_name: "Painel", url: "/app", icons: [{ src: "/icon-192.png", sizes: "192x192" }] },
-      { name: "Status público", short_name: "Status", url: "/status", icons: [{ src: "/icon-192.png", sizes: "192x192" }] },
+      { name: "Painel", short_name: "Painel", url: "/app", icons: [{ src: "/icon-192.png?v=174", sizes: "192x192" }] },
+      { name: "Status público", short_name: "Status", url: "/status", icons: [{ src: "/icon-192.png?v=174", sizes: "192x192" }] },
     ],
   };
   return new Response(JSON.stringify(manifest), {
@@ -1287,7 +1287,7 @@ function offlinePage(): string {
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0f1115"><title>eShop BR Alert — offline</title>
 <style>:root{color-scheme:dark;font-family:system-ui,sans-serif}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0f1115;color:#f4f7fb;padding:28px;text-align:center}.box{max-width:430px;background:#1a1e26;border:1px solid #303641;border-radius:24px;padding:28px;box-shadow:0 18px 60px #0007}img{width:96px;height:96px;border-radius:24px}h1{margin:16px 0 8px}.muted{color:#aab2bf;line-height:1.55}button{font:inherit;border:0;border-radius:12px;padding:12px 18px;background:#32cd91;color:#07150f;font-weight:800}</style></head>
-<body><main class="box"><img src="/icon-192.png" alt=""><h1>Sem conexão</h1><p class="muted">O monitor continua rodando na Cloudflare. O painel volta assim que o celular recuperar a internet.</p><button onclick="location.reload()">Tentar novamente</button></main></body></html>`;
+<body><main class="box"><img src="/icon-192.png?v=174" alt=""><h1>Sem conexão</h1><p class="muted">O monitor continua rodando na Cloudflare. O painel volta assim que o celular recuperar a internet.</p><button onclick="location.reload()">Tentar novamente</button></main></body></html>`;
 }
 
 function unauthorizedPage(errorMessage = ""): string {
@@ -1348,7 +1348,7 @@ function adminPage(state: AppState, env: Env, subscriptions: number): string {
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="eShop BR">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=174">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <title>eShop BR Alert</title>
 <style>
@@ -1388,7 +1388,7 @@ function adminPage(state: AppState, env: Env, subscriptions: number): string {
 </style>
 </head>
 <body>
-<header><img class="logo" src="/icon-192.png" alt=""><div><h1>eShop BR Alert</h1><p class="subtitle">Todas as promoções de jogos da Nintendo eShop Brasil</p></div></header>
+<header><img class="logo" src="/icon-192.png?v=174" alt=""><div><h1>eShop BR Alert</h1><p class="subtitle">Todas as promoções de jogos da Nintendo eShop Brasil</p></div></header>
 <p class="status ${state.lastError ? "err" : "ok"}">${state.lastError ? `Último erro: ${escapeHtml(state.lastError)}` : "● Monitor operacional"}</p>
 <div class="card grid">
   <div class="metric"><small>Inicializado</small><b>${state.initialized ? "Sim" : "Criando baseline"}</b></div>
