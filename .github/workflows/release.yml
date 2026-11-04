@@ -93,6 +93,9 @@ jobs:
             ghcr.io/googlechromelabs/bubblewrap:latest \
             update --skipVersionUpgrade --manifest=/workspace/twa-manifest.json
 
+          # Bubblewrap roda em Docker como root; devolve os arquivos ao runner
+          # antes de aplicar o patch nativo do Android.
+          sudo chown -R "$(id -u):$(id -g)" "$BUILD_DIR"
           python3 scripts/patch-twa-notifications.py "$BUILD_DIR"
 
           set +o pipefail
