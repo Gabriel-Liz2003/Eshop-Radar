@@ -93,6 +93,8 @@ jobs:
             ghcr.io/googlechromelabs/bubblewrap:latest \
             update --skipVersionUpgrade --manifest=/workspace/twa-manifest.json
 
+          python3 scripts/patch-twa-notifications.py "$BUILD_DIR"
+
           set +o pipefail
           yes | docker run -i --rm \
             -v "$BUILD_DIR:/workspace" \
